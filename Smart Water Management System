@@ -1,0 +1,134 @@
+#define BLYNK_TEMPLATE_ID
+#define BLYNK_TEMPLATE_NAME
+#define BLYNK_AUTH_TOKEN 
+
+#define BLYNK_PRINT Serial
+#define relayPin 
+#define relayPin2
+#define SOIL_MOISTURE_PIN 
+#define TRIGGER_PIN 
+#define ECHO_PIN 
+#define SENSOR 
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+#include <DHTesp.h>
+#include <LiquidCrystal.h>
+
+// Initialize the LCD with the pins
+LiquidCrystal lcd(13, 12, 14, 27, 26, 25);
+
+char ssid[] = "Abhishek Sehrawat";
+char pass[] = "xmgerm35";
+
+BlynkTimer timer;
+
+void updateMasterSwitch(int val) {
+  master_switch = val;
+  if (master_switch == 1) {
+    digitalWrite(relayPin, HIGH);
+  } else if (master_switch == 2) {
+    digitalWrite(relayPin2, HIGH);
+  } else if (master_switch == 3) {
+    digitalWrite(relayPin, HIGH);
+    digitalWrite(relayPin2, HIGH);
+  } else if (master_switch == 4) {
+    digitalWrite(relayPin, LOW);
+    digitalWrite(relayPin2, LOW);
+  } else {
+    myTimerEvent();
+  }
+}
+
+BLYNK_WRITE(V2) {
+  updateMasterSwitch(param.asInt());
+}
+
+BLYNK_CONNECTED() {
+  Serial.println("Connected to Blynk Cloud");
+  Blynk.setProperty(V3, "offImageUrl", "https://static-image.nyc3.cdn.digitaloceanspaces.com/general/fte/congratulations.png");
+  Blynk.setProperty(V3, "onImageUrl", "https://static-image.nyc3.cdn.digitaloceanspaces.com/general/fte/congratulations_pressed.png");
+  Blynk.setProperty(V3, "url", "https://docs.blynk.io/en/getting-started/what-do-i-need-to-blynk/how-quickstart-device-was-made");
+}
+
+void myTimerEvent() {
+  readFromSM();
+  readFromUltrasonic();
+}
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(SOIL_MOISTURE_PIN, INPUT);
+  pinMode(relayPin, OUTPUT);
+  pinMode(relayPin2, OUTPUT);
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  lcd.begin(16, 2);
+  lcd.print("Welcome!");
+  lcd.clear();
+  timer.setInterval(1000L, myTimerEvent);
+}
+
+void readFromSM() {
+  int soilMoisture = analogRead(SOIL_MOISTURE_PIN);
+  Serial.println(soilMoisture);
+  int moisturePercentage = map(soilMoisture, 490, 4095, 100, 0);
+  Serial.println(moisturePercentage);
+
+  lcd.setCursor(0, 0);
+  lcd.print("Soil Moist: ");
+  lcd.print(moisturePercentage);
+  lcd.print("%");
+
+  if (master_switch==5){
+    if (moisturePercentage < 30) {
+      digitalWrite(relayPin2, LOW);
+      Serial.println("Moisture level is low. Turning on motor.");
+    } else {
+      digitalWrite(relayPin2, HIGH);
+      Serial.println("Moisture level is restored. Turning off motor.");
+    }}
+
+  // Send soil moisture data to Blynk
+  Blynk.virtualWrite(V1, moisturePercentage);
+}
+
+
+void readFromUltrasonic() {
+  // Trigger the ultrasonic sensor
+  digitalWrite(TRIGGER_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIGGER_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIGGER_PIN, LOW);
+
+  // Measure the duration of the pulse from the echo pin
+  long duration = pulseIn(ECHO_PIN, HIGH);
+
+  // Calculate distance in centimeters
+  int distance_cm = duration * 0.034 / 2;
+  Blynk.virtualWrite(V0, distance_cm);
+
+  if (master_switch==5){
+    if (distance_cm > 10) {
+      digitalWrite(relayPin, LOW);
+      Serial.println("water lvl low. Turning on motor.");
+    }
+
+    if (distance_cm < 4) {
+      digitalWrite(relayPin, HIGH);
+      Serial.println("water lvl full. Turning off motor.");
+    }}
+
+  // lcd.clear();
+  lcd.setCursor(0, 1);
+  lcd.print("Water lvl:");
+  lcd.print(distance_cm);
+  lcd.print("cm  ");
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+}
