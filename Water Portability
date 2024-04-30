@@ -1,0 +1,56 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.ensemble import RandomForestClassifier
+import gradio as gr
+
+# Load data
+potab = pd.read_csv('filename')
+potab.dropna(inplace=True)
+
+# Split data into features (X) and target variable (y)
+X = potab[['ph', 'Hardness', 'Conductivity', 'Chloramines']]
+y = potab['Potability']
+
+# Scale the input features
+scaler = MinMaxScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+# Train the Random Forest classifier
+rf_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
+rf_classifier.fit(X_train, y_train)
+
+# Function to make predictions
+def classify_potab(ph, Hardness, Conductivity, Chloramines):
+    try:
+        # Scale the input features
+        features = scaler.transform([[ph, Hardness, Conductivity, Chloramines]])
+        # Make prediction using the trained Random Forest classifier
+        prediction = rf_classifier.predict(features)[0]
+        # Get the class name based on the prediction
+        class_name = 'Potable' if prediction == 1 else 'Non-Potable'
+        return class_name
+    except Exception as e:
+        return str(e)
+
+# Set the minimum and maximum values for the sliders
+slider_ranges = {
+    "ph": (potab['ph'].min(), potab['ph'].max()),
+    "Hardness": (potab['Hardness'].min(), potab['Hardness'].max()),
+    "Conductivity": (potab['Conductivity'].min(), potab['Conductivity'].max()),
+    "Chloramines": (potab['Chloramines'].min(), potab['Chloramines'].max())
+}
+
+# Create Gradio interface
+ph_slider = gr.Slider(minimum=slider_ranges["ph"][0], maximum=slider_ranges["ph"][1], label="ph")
+hardness_slider = gr.Slider(minimum=slider_ranges["Hardness"][0], maximum=slider_ranges["Hardness"][1], label="Hardness")
+conductivity_slider = gr.Slider(minimum=slider_ranges["Conductivity"][0], maximum=slider_ranges["Conductivity"][1], label="Conductivity")
+
+output_textbox = gr.Textbox(label="Predicted Water Potability")
+
+# Launch Gradio interface
+iface = gr.Interface(fn=classify_potab, inputs=[ph_slider, hardness_slider, conductivity_slider], outputs=output_textbox, title="Water Potability Predictor")
+iface.launch()
